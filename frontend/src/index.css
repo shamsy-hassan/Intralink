@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* WhatsApp-style color palette */
+    --bg-primary: #f0f2f5;
+    --bg-secondary: #ffffff;
+    --bg-chat: #e5ddd5;
+    --accent-primary: #00a884;
+    --accent-hover: #008f72;
+    --text-primary: #111b21;
+    --text-secondary: #667781;
+    --border-light: #e9edef;
+    --shadow-light: 0 1px 3px rgba(11, 20, 26, 0.13);
+    --shadow-medium: 0 2px 8px rgba(11, 20, 26, 0.15);
+  }
+  
+  body {
+    font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
+}

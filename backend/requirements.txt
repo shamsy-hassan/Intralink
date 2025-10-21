@@ -1,0 +1,10 @@
+flask
+flask-sqlalchemy
+flask-cors
+flask-jwt-extended
+flask-socketio
+flask-migrate
+werkzeug
+python-dotenv
+bcrypt
+user-agents

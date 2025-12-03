@@ -1,5 +1,5 @@
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask import Blueprint, request, jsonify, g
+from routes.auth import login_required
 from models.message import Message, MessageType, MessageScope
 from models.user import User
 from models.department import Department
@@ -10,11 +10,11 @@ from datetime import datetime
 messages_bp = Blueprint('messages', __name__, url_prefix='/api/messages')
 
 @messages_bp.route('/', methods=['GET'])
-@jwt_required()
+@login_required
 def get_messages():
     """Get messages with filtering"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 50, type=int)
         scope = request.args.get('scope')  # direct, department, broadcast
@@ -79,11 +79,11 @@ def get_messages():
         return jsonify({'error': str(e)}), 500
 
 @messages_bp.route('/', methods=['POST'])
-@jwt_required()
+@login_required
 def send_message():
     """Send a new message"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         data = request.get_json()
         
         if not data.get('content'):
@@ -142,11 +142,11 @@ def send_message():
         return jsonify({'error': str(e)}), 500
 
 @messages_bp.route('/<int:message_id>/read', methods=['POST'])
-@jwt_required()
+@login_required
 def mark_message_read(message_id):
     """Mark message as read"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         message = Message.query.get(message_id)
         
         if not message:
@@ -160,11 +160,11 @@ def mark_message_read(message_id):
         return jsonify({'error': str(e)}), 500
 
 @messages_bp.route('/conversations', methods=['GET'])
-@jwt_required()
+@login_required
 def get_conversations():
     """Get user's conversations"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         
         # Get direct message conversations
         direct_conversations = db.session.query(Message).filter(

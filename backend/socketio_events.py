@@ -1,5 +1,5 @@
+from flask import session, request
 from flask_socketio import emit, join_room, leave_room, disconnect
-from flask_jwt_extended import decode_token
 from models.user import User
 from models.message import Message, MessageType, MessageScope
 from models.notification import Notification, NotificationType
@@ -14,17 +14,14 @@ def register_socketio_events(socketio):
     """Register all SocketIO event handlers"""
     
     @socketio.on('connect')
-    def on_connect(auth):
+    def on_connect():
         """Handle client connection"""
         try:
-            # Verify JWT token
-            if not auth or 'token' not in auth:
+            if 'user_id' not in session:
                 disconnect()
                 return False
             
-            token = auth['token']
-            decoded_token = decode_token(token)
-            user_id = decoded_token['sub']
+            user_id = session['user_id']
             
             # Get user from database
             user = User.query.get(user_id)
@@ -32,9 +29,8 @@ def register_socketio_events(socketio):
                 disconnect()
                 return False
             
-            # Store connection (using socketio.session instead of request.sid)
-            from flask import session
-            session_id = session.get('session_id', id(session))
+            # Store connection
+            session_id = request.sid
             connected_users[session_id] = user_id
             
             # Join user's personal room
@@ -69,8 +65,7 @@ def register_socketio_events(socketio):
     def on_disconnect():
         """Handle client disconnection"""
         try:
-            from flask import session
-            session_id = session.get('session_id', id(session))
+            session_id = request.sid
             user_id = connected_users.get(session_id)
             if user_id:
                 # Remove from connected users

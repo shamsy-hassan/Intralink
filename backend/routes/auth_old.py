@@ -1,15 +1,28 @@
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, create_access_token, create_refresh_token, get_jwt_identity, get_jwt
+from flask import Blueprint, request, jsonify, session, g
+from functools import wraps
 from models.user import User, UserStatus
 from models.log import Log, LogLevel, LogAction
 from database import db
 from datetime import datetime
 import bcrypt
 
-auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
+auth_bp = Blueprint('auth_old', __name__, url_prefix='/api/auth_old')
 
-# Store blacklisted tokens (in production, use Redis)
-blacklisted_tokens = set()
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({'error': 'Authentication required'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+@auth_bp.before_app_request
+def load_logged_in_user():
+    user_id = session.get('user_id')
+    if user_id is None:
+        g.user = None
+    else:
+        g.user = User.query.get(user_id)
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
@@ -54,15 +67,9 @@ def register():
             user_agent=request.headers.get('User-Agent')
         )
         
-        # Create tokens
-        access_token = create_access_token(identity=str(user.id))
-        refresh_token = create_refresh_token(identity=str(user.id))
-        
         return jsonify({
             'message': 'User registered successfully',
             'user': user.to_dict(),
-            'access_token': access_token,
-            'refresh_token': refresh_token
         }), 201
         
     except Exception as e:
@@ -71,7 +78,7 @@ def register():
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
-    """Authenticate user and return tokens"""
+    """Authenticate user and start a session"""
     try:
         data = request.get_json()
         
@@ -101,10 +108,10 @@ def login():
         user.last_seen = datetime.utcnow()
         user.is_online = True
         db.session.commit()
-        
-        # Create tokens
-        access_token = create_access_token(identity=str(user.id))
-        refresh_token = create_refresh_token(identity=str(user.id))
+
+        # Set user_id in session
+        session['user_id'] = user.id
+        session.permanent = True
         
         # Log successful login
         Log.create_log(
@@ -119,47 +126,18 @@ def login():
         return jsonify({
             'message': 'Login successful',
             'user': user.to_dict(),
-            'access_token': access_token,
-            'refresh_token': refresh_token
-        }), 200
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@auth_bp.route('/refresh', methods=['POST'])
-@jwt_required(refresh=True)
-def refresh():
-    """Refresh access token"""
-    try:
-        current_user_id = get_jwt_identity()
-        user = User.query.get(int(current_user_id))
-        
-        if not user or user.status != UserStatus.ACTIVE:
-            return jsonify({'error': 'User not found or inactive'}), 404
-        
-        # Create new access token
-        access_token = create_access_token(identity=current_user_id)
-        
-        return jsonify({
-            'access_token': access_token
         }), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @auth_bp.route('/logout', methods=['POST'])
-@jwt_required()
+@login_required
 def logout():
-    """Logout user and blacklist token"""
+    """Logout user and clear session"""
     try:
-        current_user_id = get_jwt_identity()
-        jti = get_jwt()['jti']  # JWT ID
-        
-        # Add token to blacklist
-        blacklisted_tokens.add(jti)
-        
-        # Update user's online status
-        user = User.query.get(current_user_id)
+        user_id = session.get('user_id')
+        user = User.query.get(user_id)
         if user:
             user.is_online = False
             user.last_seen = datetime.utcnow()
@@ -175,20 +153,19 @@ def logout():
                 user_agent=request.headers.get('User-Agent')
             )
         
+        session.clear()
+        
         return jsonify({'message': 'Logout successful'}), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @auth_bp.route('/me', methods=['GET'])
-@jwt_required()
-def get_current_user():
+@login_required
+def get_current_user_info():
     """Get current user information"""
     try:
-        current_user_id = get_jwt_identity()
-        # Convert string ID back to integer for database query
-        user = User.query.get(int(current_user_id))
-        
+        user = g.user
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
@@ -196,15 +173,3 @@ def get_current_user():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-# JWT token blacklist checker
-@auth_bp.before_app_request
-def check_if_token_revoked():
-    """Check if token is blacklisted"""
-    if request.endpoint and 'auth' in request.endpoint:
-        try:
-            jti = get_jwt()['jti']
-            if jti in blacklisted_tokens:
-                return jsonify({'error': 'Token has been revoked'}), 401
-        except:
-            pass

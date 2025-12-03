@@ -1,5 +1,5 @@
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask import Blueprint, request, jsonify, g
+from routes.auth import login_required
 from models.department import Department
 from models.user import User, UserRole
 from models.log import Log, LogLevel, LogAction
@@ -12,15 +12,14 @@ def admin_required(f):
     """Decorator to require admin role"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        user = g.user
         if not user or user.role not in [UserRole.ADMIN, UserRole.HR]:
             return jsonify({'error': 'Admin or HR access required'}), 403
         return f(*args, **kwargs)
     return decorated_function
 
 @departments_bp.route('/', methods=['GET'])
-@jwt_required()
+@login_required
 def get_departments():
     """Get all departments"""
     try:
@@ -33,12 +32,12 @@ def get_departments():
         return jsonify({'error': str(e)}), 500
 
 @departments_bp.route('/', methods=['POST'])
-@jwt_required()
+@login_required
 @admin_required
 def create_department():
     """Create new department"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         data = request.get_json()
         
         if not data.get('name'):
@@ -77,12 +76,12 @@ def create_department():
         return jsonify({'error': str(e)}), 500
 
 @departments_bp.route('/<int:department_id>', methods=['PUT'])
-@jwt_required()
+@login_required
 @admin_required
 def update_department(department_id):
     """Update department"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         department = Department.query.get(department_id)
         
         if not department:
@@ -121,12 +120,12 @@ def update_department(department_id):
         return jsonify({'error': str(e)}), 500
 
 @departments_bp.route('/<int:department_id>', methods=['DELETE'])
-@jwt_required()
+@login_required
 @admin_required
 def delete_department(department_id):
     """Delete department"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         department = Department.query.get(department_id)
         
         if not department:
@@ -157,7 +156,7 @@ def delete_department(department_id):
         return jsonify({'error': str(e)}), 500
 
 @departments_bp.route('/<int:department_id>/users', methods=['GET'])
-@jwt_required()
+@login_required
 def get_department_users(department_id):
     """Get users in a department"""
     try:

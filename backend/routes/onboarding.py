@@ -1,5 +1,4 @@
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import create_access_token, create_refresh_token
+from flask import Blueprint, request, jsonify, session
 from models.user import User, UserStatus, UserRole
 from models.department import Department
 from models.log import Log, LogLevel, LogAction
@@ -124,8 +123,8 @@ def verify_otp():
         existing_user = User.query.filter_by(employee_id=work_id).first()
         if existing_user:
             # User already exists, just log them in
-            access_token = create_access_token(identity=str(existing_user.id))
-            refresh_token = create_refresh_token(identity=str(existing_user.id))
+            session['user_id'] = existing_user.id
+            session.permanent = True
             
             # Clean up OTP storage
             if work_id in otp_storage:
@@ -133,8 +132,6 @@ def verify_otp():
                 
             return jsonify({
                 'message': 'Login successful',
-                'access_token': access_token,
-                'refresh_token': refresh_token,
                 'user': existing_user.to_dict(),
                 'requires_profile': False
             }), 200
@@ -206,9 +203,9 @@ def complete_profile():
         if work_id in otp_storage:
             del otp_storage[work_id]
         
-        # Create access tokens
-        access_token = create_access_token(identity=str(user.id))
-        refresh_token = create_refresh_token(identity=str(user.id))
+        # Log in the user by setting the session
+        session['user_id'] = user.id
+        session.permanent = True
         
         # Log successful registration
         log = Log(
@@ -223,8 +220,6 @@ def complete_profile():
         
         return jsonify({
             'message': 'Profile created successfully',
-            'access_token': access_token,
-            'refresh_token': refresh_token,
             'user': user.to_dict(),
             # In production, send this via secure channel
             'temp_password': temp_password  # For initial login setup

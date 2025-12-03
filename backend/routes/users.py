@@ -1,5 +1,5 @@
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask import Blueprint, request, jsonify, g
+from routes.auth import login_required
 from models.user import User, UserRole, UserStatus
 from models.log import Log, LogLevel, LogAction
 from database import db
@@ -11,15 +11,14 @@ def admin_required(f):
     """Decorator to require admin role"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        user = g.user
         if not user or user.role not in [UserRole.ADMIN, UserRole.HR]:
             return jsonify({'error': 'Admin or HR access required'}), 403
         return f(*args, **kwargs)
     return decorated_function
 
 @users_bp.route('/', methods=['GET'])
-@jwt_required()
+@login_required
 @admin_required
 def get_users():
     """Get all users with pagination and filtering"""
@@ -65,15 +64,14 @@ def get_users():
         return jsonify({'error': str(e)}), 500
 
 @users_bp.route('/<int:user_id>', methods=['GET'])
-@jwt_required()
+@login_required
 def get_user(user_id):
     """Get specific user by ID"""
     try:
-        current_user_id = get_jwt_identity()
-        current_user = User.query.get(current_user_id)
+        current_user = g.user
         
         # Users can view their own profile, admins can view any profile
-        if current_user_id != user_id and current_user.role not in [UserRole.ADMIN, UserRole.HR]:
+        if current_user.id != user_id and current_user.role not in [UserRole.ADMIN, UserRole.HR]:
             return jsonify({'error': 'Access denied'}), 403
         
         user = User.query.get(user_id)
@@ -86,15 +84,14 @@ def get_user(user_id):
         return jsonify({'error': str(e)}), 500
 
 @users_bp.route('/<int:user_id>', methods=['PUT'])
-@jwt_required()
+@login_required
 def update_user(user_id):
     """Update user information"""
     try:
-        current_user_id = get_jwt_identity()
-        current_user = User.query.get(current_user_id)
+        current_user = g.user
         
         # Users can update their own profile, admins can update any profile
-        if current_user_id != user_id and current_user.role not in [UserRole.ADMIN, UserRole.HR]:
+        if current_user.id != user_id and current_user.role not in [UserRole.ADMIN, UserRole.HR]:
             return jsonify({'error': 'Access denied'}), 403
         
         user = User.query.get(user_id)
@@ -131,7 +128,7 @@ def update_user(user_id):
             level=LogLevel.INFO,
             action=LogAction.UPDATE,
             description=f"User {user.username} updated",
-            user_id=current_user_id,
+            user_id=current_user.id,
             ip_address=request.remote_addr,
             user_agent=request.headers.get('User-Agent'),
             extra_data={'updated_user_id': user_id}
@@ -147,12 +144,12 @@ def update_user(user_id):
         return jsonify({'error': str(e)}), 500
 
 @users_bp.route('/<int:user_id>', methods=['DELETE'])
-@jwt_required()
+@login_required
 @admin_required
 def delete_user(user_id):
     """Delete user (admin only)"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         user = User.query.get(user_id)
         
         if not user:
@@ -183,7 +180,7 @@ def delete_user(user_id):
         return jsonify({'error': str(e)}), 500
 
 @users_bp.route('/online', methods=['GET'])
-@jwt_required()
+@login_required
 def get_online_users():
     """Get list of online users"""
     try:

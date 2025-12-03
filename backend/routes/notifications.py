@@ -1,5 +1,5 @@
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask import Blueprint, request, jsonify, g
+from routes.auth import login_required
 from models.notification import Notification, NotificationType
 from models.user import User
 from app import db
@@ -7,11 +7,11 @@ from app import db
 notifications_bp = Blueprint('notifications', __name__, url_prefix='/api/notifications')
 
 @notifications_bp.route('/', methods=['GET'])
-@jwt_required()
+@login_required
 def get_notifications():
     """Get user's notifications"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         unread_only = request.args.get('unread_only', False, type=bool)
@@ -39,11 +39,11 @@ def get_notifications():
         return jsonify({'error': str(e)}), 500
 
 @notifications_bp.route('/<int:notification_id>/read', methods=['POST'])
-@jwt_required()
+@login_required
 def mark_notification_read(notification_id):
     """Mark notification as read"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         notification = Notification.query.filter_by(
             id=notification_id, 
             user_id=current_user_id
@@ -60,11 +60,11 @@ def mark_notification_read(notification_id):
         return jsonify({'error': str(e)}), 500
 
 @notifications_bp.route('/read-all', methods=['POST'])
-@jwt_required()
+@login_required
 def mark_all_read():
     """Mark all notifications as read for user"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         
         notifications = Notification.query.filter_by(
             user_id=current_user_id,
@@ -82,11 +82,11 @@ def mark_all_read():
         return jsonify({'error': str(e)}), 500
 
 @notifications_bp.route('/unread-count', methods=['GET'])
-@jwt_required()
+@login_required
 def get_unread_count():
     """Get count of unread notifications"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         
         count = Notification.query.filter_by(
             user_id=current_user_id,

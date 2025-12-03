@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Camera, User, Building, ArrowLeft, Check } from 'lucide-react';
 import { onboardingAPI, type Department } from '../../lib/onboardingApi';
+import { useAuth } from '../../context/AuthContext';
 
 interface ProfileSetupProps {
   workId: string;
@@ -18,6 +20,8 @@ interface ProfileData {
 }
 
 const ProfileSetup: React.FC<ProfileSetupProps> = ({ workId, onComplete, onBack }) => {
+  const navigate = useNavigate();
+  const { checkAuthStatus } = useAuth();
   const [profileData, setProfileData] = useState<ProfileData>({
     firstName: '',
     lastName: '',
@@ -78,7 +82,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ workId, onComplete, onBack 
     setError('');
 
     try {
-      const response = await onboardingAPI.completeProfile({
+      await onboardingAPI.completeProfile({
         workId,
         firstName: profileData.firstName,
         lastName: profileData.lastName,
@@ -87,19 +91,10 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ workId, onComplete, onBack 
         phone: profileData.phone
       });
 
-      // Store authentication tokens
-      localStorage.setItem('access_token', response.access_token);
-      localStorage.setItem('refresh_token', response.refresh_token);
-      localStorage.setItem('user_data', JSON.stringify(response.user));
-
-      onComplete({
-        ...profileData,
-        userData: response.user,
-        tokens: {
-          access_token: response.access_token,
-          refresh_token: response.refresh_token
-        }
-      } as any);
+      // The backend has set the session cookie.
+      // We need to update the auth context and navigate.
+      await checkAuthStatus();
+      navigate('/user/dashboard');
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to create profile. Please try again.';
       setError(message);
@@ -226,7 +221,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ workId, onComplete, onBack 
 
               {/* Department */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+.                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Department
                 </label>
                 <div className="relative">

@@ -14,7 +14,7 @@ interface OTPVerificationProps {
 
 const OTPVerification: React.FC<OTPVerificationProps> = ({ workId, contactInfo, onNext, onBack }) => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { checkAuthStatus } = useAuth();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -79,28 +79,16 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({ workId, contactInfo, 
     try {
       const response = await onboardingAPI.verifyOTP({ workId, otp: otpCode });
       
-      console.log('OTP Verification Response:', response);
-      
-      // Check if response includes user account data (auto-login)
-      if (response.access_token && response.user) {
-        console.log('Auto-login detected, storing tokens and redirecting...');
-        alert('Auto-login successful! Redirecting to dashboard...');
-        
-        // Store tokens and user data
-        localStorage.setItem('access_token', response.access_token);
-        localStorage.setItem('refresh_token', response.refresh_token || '');
-        localStorage.setItem('user_data', JSON.stringify(response.user));
-        
-        console.log('Tokens stored, navigating to dashboard...');
-        
-        // Redirect to user dashboard
-        window.location.href = '/user/dashboard';
+      // Check if user exists and is logged in
+      if (response.user && response.requires_profile === false) {
+        // The backend has set the session cookie.
+        // We need to update the auth context.
+        await checkAuthStatus();
+        navigate('/user/dashboard');
         return;
       }
       
-      console.log('No auto-login, continuing with normal flow...');
-      
-      // Fallback: continue with normal flow (profile setup)
+      // If user does not exist, continue to profile setup
       onNext(otpCode);
     } catch (error: any) {
       const message = error.response?.data?.message || 'Invalid verification code. Please try again.';

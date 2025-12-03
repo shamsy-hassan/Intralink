@@ -1,5 +1,5 @@
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask import Blueprint, request, jsonify, g
+from routes.auth import login_required
 from database import db
 from models.vote import Vote, UserVote, VoteStatus, VoteType
 from models.user import User, UserRole
@@ -12,8 +12,7 @@ votes_bp = Blueprint('votes', __name__)
 def admin_required(f):
     """Decorator to require admin role"""
     def decorated_function(*args, **kwargs):
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        user = g.user
         if not user or user.role != UserRole.ADMIN:
             return jsonify({'error': 'Admin access required'}), 403
         return f(*args, **kwargs)
@@ -23,8 +22,7 @@ def admin_required(f):
 def admin_or_hr_required(f):
     """Decorator to require admin or HR role"""
     def decorated_function(*args, **kwargs):
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        user = g.user
         if not user or user.role not in [UserRole.ADMIN, UserRole.HR]:
             return jsonify({'error': 'Admin or HR access required'}), 403
         return f(*args, **kwargs)
@@ -32,12 +30,12 @@ def admin_or_hr_required(f):
     return decorated_function
 
 @votes_bp.route('/', methods=['GET'])
-@jwt_required()
+@login_required
 def get_votes():
     """Get all votes (admin/HR see all, users see active votes they can participate in)"""
     try:
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        user = g.user
+        current_user_id = user.id
         
         if not user:
             return jsonify({'error': 'User not found'}), 404
@@ -64,12 +62,12 @@ def get_votes():
         return jsonify({'error': str(e)}), 500
 
 @votes_bp.route('/', methods=['POST'])
-@jwt_required()
+@login_required
 @admin_or_hr_required
 def create_vote():
     """Create a new vote/poll"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         data = request.get_json()
         
         # Validate required fields
@@ -133,12 +131,12 @@ def create_vote():
         return jsonify({'error': str(e)}), 500
 
 @votes_bp.route('/<int:vote_id>', methods=['GET'])
-@jwt_required()
+@login_required
 def get_vote(vote_id):
     """Get a specific vote with details"""
     try:
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        user = g.user
+        current_user_id = user.id
         
         vote = Vote.query.get(vote_id)
         if not vote:
@@ -169,12 +167,12 @@ def get_vote(vote_id):
         return jsonify({'error': str(e)}), 500
 
 @votes_bp.route('/<int:vote_id>', methods=['PUT'])
-@jwt_required()
+@login_required
 @admin_or_hr_required
 def update_vote(vote_id):
     """Update a vote"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         data = request.get_json()
         
         vote = Vote.query.get(vote_id)
@@ -182,7 +180,7 @@ def update_vote(vote_id):
             return jsonify({'error': 'Vote not found'}), 404
             
         # Only creator or admin can edit
-        user = User.query.get(current_user_id)
+        user = g.user
         if user.role != UserRole.ADMIN and vote.created_by != current_user_id:
             return jsonify({'error': 'Permission denied'}), 403
             
@@ -232,19 +230,19 @@ def update_vote(vote_id):
         return jsonify({'error': str(e)}), 500
 
 @votes_bp.route('/<int:vote_id>', methods=['DELETE'])
-@jwt_required()
+@login_required
 @admin_or_hr_required
 def delete_vote(vote_id):
     """Delete a vote"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         
         vote = Vote.query.get(vote_id)
         if not vote:
             return jsonify({'error': 'Vote not found'}), 404
             
         # Only creator or admin can delete
-        user = User.query.get(current_user_id)
+        user = g.user
         if user.role != UserRole.ADMIN and vote.created_by != current_user_id:
             return jsonify({'error': 'Permission denied'}), 403
             
@@ -258,11 +256,11 @@ def delete_vote(vote_id):
         return jsonify({'error': str(e)}), 500
 
 @votes_bp.route('/<int:vote_id>/vote', methods=['POST'])
-@jwt_required()
+@login_required
 def cast_vote(vote_id):
     """Cast a vote"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         data = request.get_json()
         
         vote = Vote.query.get(vote_id)
@@ -281,7 +279,7 @@ def cast_vote(vote_id):
             return jsonify({'error': 'Voting has ended'}), 400
             
         # Check if user is in target departments
-        user = User.query.get(current_user_id)
+        user = g.user
         if vote.target_departments and user.department.name not in vote.target_departments:
             return jsonify({'error': 'You are not eligible to vote on this'}), 403
             
@@ -325,12 +323,12 @@ def cast_vote(vote_id):
         return jsonify({'error': str(e)}), 500
 
 @votes_bp.route('/<int:vote_id>/results', methods=['GET'])
-@jwt_required()
+@login_required
 def get_vote_results(vote_id):
     """Get detailed vote results"""
     try:
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        current_user_id = g.user.id
+        user = g.user
         
         vote = Vote.query.get(vote_id)
         if not vote:

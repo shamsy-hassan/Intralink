@@ -1,6 +1,7 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager
+from flask_session import Session
+import redis
 from flask_socketio import SocketIO
 from flask_migrate import Migrate
 from database import db
@@ -8,9 +9,9 @@ import os
 from datetime import timedelta
 
 # Initialize Flask extensions
-jwt = JWTManager()
 socketio = SocketIO()
 migrate = Migrate()
+sess = Session()
 
 def create_app():
     app = Flask(__name__)
@@ -19,52 +20,21 @@ def create_app():
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///intralink.db')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'jwt-secret-change-in-production')
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
-    app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
-    app.config['JWT_CSRF_IN_COOKIES'] = False  # Disable CSRF protection for API
-    app.config['JWT_CSRF_CHECK_FORM'] = False
-    app.config['JWT_TOKEN_LOCATION'] = ['headers']
-    app.config['JWT_COOKIE_CSRF_PROTECT'] = False
     
+    # Session Configuration
+    app.config['SESSION_TYPE'] = 'filesystem'
+    app.config['SESSION_FILE_DIR'] = os.path.join(app.instance_path, 'flask_session')
+    app.config['SESSION_PERMANENT'] = True
+    app.config['SESSION_USE_SIGNER'] = True
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
+
+    # Create session directory if it doesn't exist
+    os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
+
     # Initialize extensions with app
     db.init_app(app)
-    jwt.init_app(app)
+    sess.init_app(app)
     migrate.init_app(app, db)
-    
-    # JWT error handlers
-    @jwt.expired_token_loader
-    def expired_token_callback(jwt_header, jwt_payload):
-        return jsonify({'error': 'Token has expired'}), 401
-    
-    @jwt.invalid_token_loader
-    def invalid_token_callback(error):
-           from flask import request
-           print(f"[JWT] Invalid token: {error}")
-           print(f"[JWT] Authorization header: {request.headers.get('Authorization')}")
-           return jsonify({'error': 'Invalid token'}), 401
-    
-    @jwt.unauthorized_loader
-    def missing_token_callback(error):
-           from flask import request
-           print(f"[JWT] Unauthorized: {error}")
-           print(f"[JWT] Authorization header: {request.headers.get('Authorization')}")
-           return jsonify({'error': 'Authorization token is required'}), 401
-    
-    @jwt.needs_fresh_token_loader
-    def token_not_fresh_callback(jwt_header, jwt_payload):
-        return jsonify({'error': 'Fresh token required'}), 401
-    
-    @jwt.revoked_token_loader
-    def revoked_token_callback(jwt_header, jwt_payload):
-        return jsonify({'error': 'Token has been revoked'}), 401
-    
-    # Token blacklist checker
-    @jwt.token_in_blocklist_loader
-    def check_if_token_revoked(jwt_header, jwt_payload):
-        from routes.auth import blacklisted_tokens
-        jti = jwt_payload['jti']
-        return jti in blacklisted_tokens
     
     # Configure CORS
     CORS(app,

@@ -2,18 +2,15 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { User } from '../types'
 import { authAPI, attemptSilentAuth } from '../lib/api'
-import { getDeviceId, clearDeviceId } from '../lib/deviceFingerprint'
 
 interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
   isInitialized: boolean
-  deviceId: string
   login: (credentials: LoginCredentials) => Promise<void>
   register: (userData: RegisterData) => Promise<void>
   logout: () => Promise<void>
-  logoutAll: () => Promise<void>
   updateUser: (userData: Partial<User>) => void
   checkAuthStatus: () => Promise<void>
 }
@@ -21,7 +18,6 @@ interface AuthContextType {
 interface LoginCredentials {
   username: string
   password: string
-  remember_me?: boolean
 }
 
 interface RegisterData {
@@ -51,7 +47,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isInitialized, setIsInitialized] = useState(false)
-  const [deviceId] = useState(() => getDeviceId())
 
   const isAuthenticated = !!user
 
@@ -63,47 +58,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const initializeAuth = async () => {
     try {
       setIsLoading(true)
+      const silentAuthResult = await attemptSilentAuth()
       
-      // First check if we have a stored access token
-      const storedToken = localStorage.getItem('access_token')
-      
-      if (storedToken) {
-        // Try to verify current token first
-        try {
-          const response = await authAPI.getCurrentUser()
-          setUser(response.data.user)
-          console.log('✅ Restored session with existing token')
-          setIsInitialized(true)
-          return
-        } catch (error) {
-          // Token invalid, clear it and try refresh
-          console.log('⚠️ Stored token invalid, clearing...')
-          localStorage.removeItem('access_token')
-        }
-      }
-      
-      // Only attempt silent refresh if there's no valid token AND we have cookies
-      // Check if we have cookies that might contain refresh token
-      const hasCookies = document.cookie.includes('refresh_token') || document.cookie.includes('device_id')
-      
-      if (hasCookies) {
-        console.log('🔄 Attempting silent refresh...')
-        const silentAuthResult = await attemptSilentAuth()
-        
-        if (silentAuthResult.success) {
-          setUser(silentAuthResult.user)
-          console.log('✅ Session restored via silent refresh')
-        } else {
-          console.log('ℹ️ Silent refresh failed, user needs to login')
-        }
+      if (silentAuthResult.success) {
+        setUser(silentAuthResult.user)
+        console.log('✅ Session restored via session cookie')
       } else {
-        console.log('ℹ️ No refresh cookies found, user needs to login')
+        console.log('ℹ️ No active session found, user needs to login')
       }
       
     } catch (error) {
       console.error('❌ Auth initialization failed:', error)
-      // Clear potentially corrupted auth state
-      localStorage.removeItem('access_token')
     } finally {
       setIsLoading(false)
       setIsInitialized(true)
@@ -117,7 +82,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Auth status check failed:', error)
       setUser(null)
-      localStorage.removeItem('access_token')
     }
   }
 
@@ -125,15 +89,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true)
       
-      const response = await authAPI.login({
-        ...credentials,
-        remember_me: credentials.remember_me ?? true
-      })
+      const response = await authAPI.login(credentials)
+      const { user: userData } = response.data
       
-      const { access_token, user: userData } = response.data
-      
-      // Store access token
-      localStorage.setItem('access_token', access_token)
       setUser(userData)
       
       console.log('✅ Login successful')
@@ -162,7 +120,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await login({
         username: userData.username,
         password: userData.password,
-        remember_me: true
       })
       
     } catch (error: any) {
@@ -185,22 +142,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } finally {
       // Always clear local state regardless of API call success
       setUser(null)
-      localStorage.removeItem('access_token')
       console.log('✅ Logged out')
-    }
-  }
-
-  const logoutAll = async () => {
-    try {
-      await authAPI.logoutAll()
-    } catch (error) {
-      console.error('Logout all request failed:', error)
-    } finally {
-      // Always clear local state regardless of API call success
-      setUser(null)
-      localStorage.removeItem('access_token')
-      clearDeviceId() // Clear device ID to force re-registration
-      console.log('✅ Logged out from all devices')
     }
   }
 
@@ -215,11 +157,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAuthenticated,
     isLoading,
     isInitialized,
-    deviceId,
     login,
     register,
     logout,
-    logoutAll,
     updateUser,
     checkAuthStatus
   }

@@ -1,5 +1,5 @@
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask import Blueprint, request, jsonify, g
+from routes.auth import login_required
 from models.alert import Alert, AlertType, AlertScope, AlertStatus
 from models.user import User, UserRole
 from models.log import Log, LogLevel, LogAction
@@ -14,20 +14,19 @@ def admin_required(f):
     """Decorator to require admin role"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        user = g.user
         if not user or user.role not in [UserRole.ADMIN, UserRole.HR]:
             return jsonify({'error': 'Admin or HR access required'}), 403
         return f(*args, **kwargs)
     return decorated_function
 
 @alerts_bp.route('/', methods=['GET'])
-@jwt_required()
+@login_required
 def get_alerts():
     """Get alerts for user"""
     try:
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        user = g.user
+        current_user_id = user.id
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         alert_type = request.args.get('type')
@@ -74,12 +73,12 @@ def get_alerts():
         return jsonify({'error': str(e)}), 500
 
 @alerts_bp.route('/', methods=['POST'])
-@jwt_required()
+@login_required
 @admin_required
 def create_alert():
     """Create and optionally send alert"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         data = request.get_json()
         
         if not data.get('title') or not data.get('message'):
@@ -143,12 +142,12 @@ def create_alert():
         return jsonify({'error': str(e)}), 500
 
 @alerts_bp.route('/<int:alert_id>/send', methods=['POST'])
-@jwt_required()
+@login_required
 @admin_required
 def send_alert(alert_id):
     """Send a draft alert immediately"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         alert = Alert.query.get(alert_id)
         
         if not alert:
@@ -185,11 +184,11 @@ def send_alert(alert_id):
         return jsonify({'error': str(e)}), 500
 
 @alerts_bp.route('/<int:alert_id>/acknowledge', methods=['POST'])
-@jwt_required()
+@login_required
 def acknowledge_alert(alert_id):
     """Acknowledge an alert"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = g.user.id
         alert = Alert.query.get(alert_id)
         
         if not alert:

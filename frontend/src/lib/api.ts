@@ -210,3 +210,8 @@ export const notificationsAPI = {
   
   markAllNotificationsRead: () => api.post('/notifications/read-all'),
 }
+
+// Analytics API
+export const analyticsAPI = {
+  getCommunicationAnalytics: () => api.get('/analytics/communication'),
+}

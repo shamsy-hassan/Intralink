@@ -60,6 +60,7 @@ def create_app():
     from routes.health import health_bp
     from routes.onboarding import onboarding_bp
     from routes.votes import votes_bp
+    from routes.analytics import analytics_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(users_bp, url_prefix='/api/users')
@@ -70,6 +71,7 @@ def create_app():
     app.register_blueprint(health_bp, url_prefix='/api')
     app.register_blueprint(onboarding_bp, url_prefix='/api/onboarding')
     app.register_blueprint(votes_bp, url_prefix='/api/votes')
+    app.register_blueprint(analytics_bp, url_prefix='/api/analytics')
     
     # Register SocketIO events
     from socketio_events import register_socketio_events

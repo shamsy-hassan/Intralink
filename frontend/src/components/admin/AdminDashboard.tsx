@@ -21,6 +21,8 @@ import Broadcasting from './Broadcasting';
 import EmergencyAlerts from './EmergencyAlerts';
 import { VotingManagement } from './VotingManagement';
 
+import CommunicationAnalytics from './CommunicationAnalytics';
+
 interface SidebarItem {
   id: string;
   label: string;
@@ -405,7 +407,7 @@ const AdminDashboard: React.FC = () => {
                 </EmergencyAlertsGuard>
               } 
             />
-            <Route path="/analytics" element={<div className="text-center py-12"><p className="text-gray-500">Communication Analytics - Coming Soon</p></div>} />
+            <Route path="/analytics" element={<CommunicationAnalytics />} />
           </Routes>
         </main>
       </div>
